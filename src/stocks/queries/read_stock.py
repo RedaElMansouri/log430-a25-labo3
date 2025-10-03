@@ -21,19 +21,23 @@ def get_stock_by_id(product_id):
         return {}
 
 def get_stock_for_all_products():
-    """Get stock quantity for all products"""
+    """Get stock overview for all products (name, sku, price, quantity) using a join with Product"""
     session = get_sqlalchemy_session()
-    # TODO: ajoutez un join avec Product
+    # Jointure avec Product pour récupérer les informations de l'article
     results = session.query(
         Stock.product_id,
         Stock.quantity,
-    ).all()
+        Product.name,
+        Product.sku,
+        Product.price,
+    ).join(Product, Stock.product_id == Product.id).all()
     stock_data = []
     for row in results:
         stock_data.append({
             'Article': row.product_id,
-            'Numéro SKU': '',
-            'Prix unitaire': 0,
+            'name': row.name,
+            'sku': row.sku,
+            'price': row.price,
             'Unités en stock': int(row.quantity),
         })
     

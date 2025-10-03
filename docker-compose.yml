@@ -3,12 +3,16 @@ services:
     build: .
     environment:
       - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
     volumes:
       - .:/app
     ports:
-      - "5000:5000"
+      - "5001:5000"
     networks:
-      - labo03-network
+      labo03-network:
+        aliases:
+          - store-manager
     depends_on:
       - mysql
       - redis

@@ -3,6 +3,8 @@ services:
     build: .
     environment:
       - PYTHONUNBUFFERED=1
+      # Use the internal DNS name/alias of the API service on the shared Docker network
+      - ENDPOINT_URL=http://store-manager:5000/stocks/graphql-query
     volumes:
       - .:/app
     networks:

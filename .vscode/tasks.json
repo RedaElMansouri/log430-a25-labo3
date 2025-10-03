@@ -1,0 +1,31 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run pytest for project",
+			"type": "shell",
+			"command": "pytest -q",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pytest-stylish"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run pytest for project",
+			"type": "shell",
+			"command": "/Users/redaelmansouri/Documents/ETS/A25/LOG430/Labo/Lab3/log430-a25-labo3/.venv/bin/python",
+			"args": [
+				"-m",
+				"pytest",
+				"-q"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pytest-stylish"
+			],
+			"group": "build"
+		}
+	]
+}

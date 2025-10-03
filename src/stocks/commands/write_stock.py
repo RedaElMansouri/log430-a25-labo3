@@ -6,6 +6,7 @@ Auteurs : Gabriel C. Ullmann, Fabio Petrillo, 2025
 from sqlalchemy import text
 from stocks.models.stock import Stock
 from db import get_redis_conn, get_sqlalchemy_session
+from stocks.queries.read_product import get_product_by_id
 
 def set_stock_for_product(product_id, quantity):
     """Set stock quantity for product in MySQL"""
@@ -27,8 +28,18 @@ def set_stock_for_product(product_id, quantity):
             session.commit()
             response_message = f"rows added: {new_stock.product_id}"
   
+        # Update Redis with latest quantity and ensure product master data is present
         r = get_redis_conn()
-        r.hset(f"stock:{product_id}", "quantity", quantity)
+        product_row = get_product_by_id(int(product_id)) or {}
+        base_mapping = {
+            "quantity": int(quantity) if quantity is not None else 0,
+            "name": product_row.get("name"),
+            "sku": product_row.get("sku"),
+            "price": product_row.get("price"),
+        }
+        # Filter out None values to avoid Redis encoding errors
+        mapping = {k: v for k, v in base_mapping.items() if v is not None}
+        r.hset(f"stock:{product_id}", mapping=mapping)
         return response_message
     except Exception as e:
         session.rollback()
@@ -80,7 +91,7 @@ def update_stock_redis(order_items, operation):
             else:
                 product_id = item['product_id']
                 quantity = item['quantity']
-            # TODO: ajoutez plus d'information sur l'article
+            # Enrichir les infos d'article en Redis (name, sku, price) si manquantes
             current_stock = r.hget(f"stock:{product_id}", "quantity")
             current_stock = int(current_stock) if current_stock else 0
             
@@ -89,7 +100,16 @@ def update_stock_redis(order_items, operation):
             else:  
                 new_quantity = current_stock - quantity
             
-            pipeline.hset(f"stock:{product_id}", "quantity", new_quantity)
+            # Fetch product info only once per item and set missing fields
+            prod = get_product_by_id(int(product_id)) or {}
+            base_mapping = {
+                "quantity": int(new_quantity),
+                "name": prod.get("name"),
+                "sku": prod.get("sku"),
+                "price": prod.get("price"),
+            }
+            mapping = {k: v for k, v in base_mapping.items() if v is not None}
+            pipeline.hset(f"stock:{product_id}", mapping=mapping)
         
         pipeline.execute()
     
@@ -101,7 +121,13 @@ def _populate_redis_from_mysql(redis_conn):
     session = get_sqlalchemy_session()
     try:
         stocks = session.execute(
-            text("SELECT product_id, quantity FROM stocks")
+            text(
+                """
+                SELECT s.product_id, s.quantity, p.name, p.sku, p.price
+                FROM stocks s
+                JOIN products p ON s.product_id = p.id
+                """
+            )
         ).fetchall()
 
         if not len(stocks):
@@ -110,11 +136,15 @@ def _populate_redis_from_mysql(redis_conn):
         
         pipeline = redis_conn.pipeline()
         
-        for product_id, quantity in stocks:
-            pipeline.hset(
-                f"stock:{product_id}", 
-                mapping={ "quantity": quantity }
-            )
+        for product_id, quantity, name, sku, price in stocks:
+            base_mapping = {
+                "quantity": int(quantity),
+                "name": name,
+                "sku": sku,
+                "price": price,
+            }
+            mapping = {k: v for k, v in base_mapping.items() if v is not None}
+            pipeline.hset(f"stock:{product_id}", mapping=mapping)
         
         pipeline.execute()
         print(f"{len(stocks)} enregistrements de stock ont été synchronisés avec Redis")

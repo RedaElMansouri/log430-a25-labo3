@@ -41,7 +41,7 @@ jobs:
           docker compose ps
 
       - name: Run tests inside app container
-        run: docker compose exec -T store_manager pytest -q
+        run: docker compose exec -T -e PYTHONPATH=/app/src -w /app/src store_manager pytest -q
 
       - name: Show service logs on failure
         if: failure()

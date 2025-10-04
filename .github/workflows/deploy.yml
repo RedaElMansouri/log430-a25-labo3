@@ -1,0 +1,57 @@
+name: CD
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy project to server (SCP)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          source: |
+            docker-compose.yml
+            Dockerfile
+            requirements.txt
+            db-init/**
+            src/**
+          target: ~/log430-a25-labo3
+          overwrite: true
+
+      - name: Deploy via SSH (Docker Compose up)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          script: |
+            set -euo pipefail
+            sudo sh -lc 'command -v docker >/dev/null 2>&1 || curl -fsSL https://get.docker.com | sh'
+            sudo usermod -aG docker $USER || true
+            mkdir -p ~/log430-a25-labo3
+            cd ~/log430-a25-labo3
+            sudo docker network create labo03-network || true
+            cat > .env <<'EOF'
+            DB_HOST=mysql
+            DB_PORT=3306
+            DB_NAME=labo03_db
+            DB_USER=labo03
+            DB_PASS=labo03
+            REDIS_HOST=redis
+            REDIS_PORT=6379
+            REDIS_DB=0
+            EOF
+            sudo docker compose up -d --build
+            sudo docker compose ps
+            # optional health check
+            sleep 5
+            curl -sS http://localhost:5001/health-check || true
